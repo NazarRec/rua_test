@@ -1,0 +1,71 @@
+services:
+  zookeeper:
+    image: 'bitnami/zookeeper:latest'
+    ports:
+      - '2181:2181'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+  kafka:
+    image: 'bitnami/kafka:latest'
+    ports:
+      - '9092:9092'
+      - '9093:9093'
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CLIENT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_LISTENERS=CLIENT://:9092,EXTERNAL://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=CLIENT://kafka:9092,EXTERNAL://localhost:9093
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=CLIENT
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    depends_on:
+      - zookeeper
+  elastic:
+    image: elasticsearch:8.3.3
+    ports:
+      - '9200:9200'
+      - '9300:9300'
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+  consumer:
+    build:
+      context: .
+      args:
+        SERVICE_NAME: consumer
+    ports:
+      - '5004:5004'
+    depends_on:
+      - kafka
+      - elastic
+    command: sh -c "/wait && python3 /app/app.py"
+    environment:
+      - WAIT_HOSTS=kafka:9092
+      - WAIT_HOSTS_TIMEOUT=300
+      - WAIT_SLEEP_INTERVAL=30
+      - WAIT_HOST_CONNECT_TIMEOUT=30
+  producer:
+    build:
+      context: .
+      args:
+          SERVICE_NAME: producer
+    ports:
+      - '5000:5000'
+    depends_on:
+      - kafka
+    command: sh -c "/wait && python3 /app/app.py"
+    environment:
+      - WAIT_HOSTS=kafka:9092
+      - WAIT_HOSTS_TIMEOUT=300
+      - WAIT_SLEEP_INTERVAL=30
+      - WAIT_HOST_CONNECT_TIMEOUT=30
+  api:
+    build:
+      context: .
+      args:
+          SERVICE_NAME: api
+    ports:
+      - '5001:5001'
+    depends_on:
+      - elastic
